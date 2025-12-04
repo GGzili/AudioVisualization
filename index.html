@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Y2K VISUALIZER // WALLPAPER EDITION</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        /* --- GLOBAL RESET --- */
+        * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+        body { 
+            margin: 0; overflow: hidden; 
+            background-color: #000; 
+            font-family: 'Share Tech Mono', monospace; 
+            color: #00f3ff;
+        }
+        
+        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        
+        /* --- HUD (Simplified for Wallpaper) --- */
+        #ui-layer { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            z-index: 10; pointer-events: none; 
+            padding: 30px; display: flex; flex-direction: column;
+        }
+        
+        .panel { 
+            background: rgba(10, 20, 30, 0.4); 
+            backdrop-filter: blur(8px); 
+            border: 1px solid rgba(0, 243, 255, 0.2); 
+            border-radius: 4px; padding: 15px; 
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+            position: absolute;
+        }
+
+        /* Top Right Info */
+        .top-right { top: 30px; right: 30px; text-align: right; min-width: 180px; }
+        
+        .section-title { font-size: 0.7rem; color: rgba(255,255,255,0.4); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom:2px; margin-bottom: 5px; }
+        #mode-display { font-size: 1.4rem; color: #d000ff; text-shadow: 0 0 10px rgba(208, 0, 255, 0.6); }
+
+        /* Spectrum Mini */
+        .spectrum { display: flex; gap: 3px; height: 20px; margin-top: 8px; justify-content: flex-end; align-items: flex-end; }
+        .spec-bar { width: 30px; background: #333; height: 2px; }
+        #vis-low { background: #5500ff; box-shadow: 0 0 8px #ff00ff; }
+        #vis-mid { background: #0055ff; box-shadow: 0 0 8px #00f3ff; }
+        #vis-high { background: #ffaa00; box-shadow: 0 0 8px #ffffaa; }
+
+        /* Hide controls for clean wallpaper look, but keep logic running */
+        .hidden { display: none; }
+    </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        <div class="panel top-right">
+            <div class="section-title">GEOMETRY ENGINE</div>
+            <div id="mode-display">WORMHOLE</div>
+            <div style="font-size: 0.65rem; margin-top:4px; color:rgba(255,255,255,0.4);">
+                [CLICK] TO MORPH
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <div class="spectrum">
+                    <div id="vis-low" class="spec-bar"></div>
+                    <div id="vis-mid" class="spec-bar"></div>
+                    <div id="vis-high" class="spec-bar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // --- 1. CONFIG & SCENE ---
+        const COUNT = 32000; // Slightly reduced for better wallpaper performance
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.001);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000); 
+        camera.position.set(0, 100, 900);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance", alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Cap pixel ratio for performance
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0;
+        bloomPass.strength = 1.8;
+        bloomPass.radius = 0.6;
+        composer.addPass(bloomPass);
+
+        // Auto rotation vars
+        let rotSpeed = 0.001;
+        let camAngle = 0;
+
+        // --- 2. PARTICLES & GEOMETRY ---
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(COUNT * 3);
+        const targetPositions = new Float32Array(COUNT * 3);
+        const colors = new Float32Array(COUNT * 3); 
+        const sizes = new Float32Array(COUNT);
+
+        // --- SHAPE COLLECTION ---
+        const shapes = { 
+            wormhole: [], data_helix: [], cyber_grid: [], stargate: [], nebula_knot: [],
+            mobius_strip: [], lorenz_attractor: [], hyper_torus: [], fibonacci_sphere: []
+        };
+
+        // --- SHAPE GENERATORS (Compressed for brevity) ---
+        // 1. Wormhole
+        for(let i=0; i<COUNT; i++) {
+            const t = i/COUNT; const a = t*Math.PI*40; const z = (t-0.5)*3500; const r = 300+Math.pow(Math.abs(t-0.5)*2,2)*1400;
+            shapes.wormhole.push(Math.cos(a)*r+(Math.random()-0.5)*80, Math.sin(a)*r+(Math.random()-0.5)*80, z);
+        }
+        // 2. Data Helix
+        for(let i=0; i<COUNT; i++) {
+            const t=i/COUNT; const a=t*Math.PI*30; const h=(t-0.5)*2800; const r=650; const off=(i%2===0)?0:Math.PI;
+            shapes.data_helix.push(Math.cos(a+off)*r+(Math.random()-0.5)*40, h, Math.sin(a+off)*r+(Math.random()-0.5)*40);
+        }
+        // 3. Cyber Grid
+        const gS = Math.sqrt(COUNT); const sp = 75;
+        for(let i=0; i<COUNT; i++) {
+            const x = ((i%gS)-gS/2)*sp; const z = (Math.floor(i/gS)-gS/2)*sp;
+            shapes.cyber_grid.push(x, Math.sin(x*0.005)*Math.cos(z*0.005)*600, z);
+        }
+        // 4. Stargate
+        for(let i=0; i<COUNT; i++) {
+            const u=i/COUNT*Math.PI*2; const r=900+220*Math.cos(7*u);
+            shapes.stargate.push(r*Math.cos(3*u), r*Math.sin(3*u), 220*Math.sin(7*u)*2.5);
+        }
+        // 5. Nebula Knot
+        for(let i=0; i<COUNT; i++) {
+             const t=(i/COUNT)*Math.PI*120; const sc=800;
+             shapes.nebula_knot.push(sc*(Math.cos(t)+Math.cos(3*t))*0.5, sc*(Math.sin(t)+Math.sin(3*t))*0.5, sc*Math.sin(4*t)*0.5);
+        }
+        // 6. Mobius
+        for(let i=0; i<COUNT; i++) {
+            const u=(i/COUNT)*Math.PI*2; const w=(Math.random()-0.5)*400; const R=800;
+            shapes.mobius_strip.push((R+w*Math.cos(u/2))*Math.cos(u), (R+w*Math.cos(u/2))*Math.sin(u), w*Math.sin(u/2));
+        }
+        // 7. Lorenz
+        let lx=0.1, ly=0, lz=0; const dt=0.005; const scL=35;
+        for(let i=0; i<COUNT; i++) {
+            let dx=10*(ly-lx)*dt; let dy=(lx*(28-lz)-ly)*dt; let dz=(lx*ly-(8/3)*lz)*dt; lx+=dx; ly+=dy; lz+=dz;
+            shapes.lorenz_attractor.push(lx*scL, ly*scL, (lz-25)*scL);
+        }
+        // 8. Hyper Torus
+        for(let i=0; i<COUNT; i++) {
+            const u=(i/COUNT)*Math.PI*4; const v=(i/COUNT)*Math.PI*20; const R=800; const rD=280+160*Math.cos(v);
+            shapes.hyper_torus.push((R+rD*Math.cos(u))*Math.cos(v*0.1), (R+rD*Math.cos(u))*Math.sin(v*0.1), rD*Math.sin(u)+Math.sin(v)*100);
+        }
+        // 9. Sphere
+        const phi=Math.PI*(3-Math.sqrt(5)); 
+        for(let i=0; i<COUNT; i++) {
+            const y=1-(i/(COUNT-1))*2; const rad=Math.sqrt(1-y*y); const th=phi*i; const R=900;
+            shapes.fibonacci_sphere.push(Math.cos(th)*rad*R, y*R, Math.sin(th)*rad*R);
+        }
+
+        // Init Geometry
+        for(let i=0; i<COUNT*3; i++) {
+            positions[i] = shapes.wormhole[i];
+            targetPositions[i] = shapes.wormhole[i];
+            colors[i] = Math.random(); 
+        }
+        for(let i=0; i<COUNT; i++) sizes[i] = Math.random();
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('colorAttr', new THREE.BufferAttribute(colors, 1)); 
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+        // --- SHADER ---
+        const uniforms = {
+            uTime: { value: 0 },
+            uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 },
+            uBaseSize: { value: 2.0 }
+        };
+
+        const material = new THREE.ShaderMaterial({
+            uniforms: uniforms,
+            vertexShader: `
+                uniform float uTime;
+                uniform float uBass; uniform float uMid; uniform float uHigh;
+                uniform float uBaseSize;
+                attribute float size; attribute float colorAttr; 
+                varying float vType; varying float vIntensity;
+                void main() {
+                    vType = colorAttr; vec3 pos = position;
+                    float isBass = 1.0 - step(0.33, colorAttr); float isHigh = step(0.66, colorAttr); float isMid = 1.0 - isBass - isHigh;
+                    vec3 dir = normalize(pos);
+                    
+                    // Reactive modifiers (Hardcoded amps for wallpaper simplicity)
+                    vec3 moveBass = dir * uBass * 150.0;
+                    
+                    float swirlAngle = uMid * 1.5; float s = sin(swirlAngle); float c = cos(swirlAngle);
+                    float nx = pos.x * c - pos.z * s; float nz = pos.x * s + pos.z * c;
+                    vec3 moveMid = (vec3(nx, pos.y, nz) - pos) * isMid;
+                    
+                    float noise = sin(uTime * 8.0 + pos.x); vec3 moveHigh = dir * noise * uHigh * 10.0;
+                    
+                    pos += (moveBass * isBass) + moveMid + (moveHigh * isHigh);
+                    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0); gl_Position = projectionMatrix * mvPosition;
+                    
+                    float beatSize = 1.0 + (isBass * uBass * 3.0) + (isHigh * uHigh * 2.0);
+                    gl_PointSize = (uBaseSize * size * beatSize * 3.0) * (300.0 / -mvPosition.z);
+                    vIntensity = (isBass * uBass) + (isMid * uMid) + (isHigh * uHigh);
+                }
+            `,
+            fragmentShader: `
+                varying float vType; varying float vIntensity;
+                void main() {
+                    if (dot(gl_PointCoord - 0.5, gl_PointCoord - 0.5) > 0.25) discard;
+                    vec3 colBass = vec3(1.0, 0.0, 0.5); vec3 colMid = vec3(0.0, 1.0, 0.8); vec3 colHigh = vec3(1.0, 1.0, 0.5);
+                    float isBass = 1.0 - step(0.33, vType); float isHigh = step(0.66, vType); float isMid = 1.0 - isBass - isHigh;
+                    vec3 finalCol = (colBass * isBass) + (colMid * isMid) + (colHigh * isHigh);
+                    finalCol += vec3(vIntensity * 0.8);
+                    gl_FragColor = vec4(finalCol, 0.85);
+                }
+            `,
+            transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+        });
+
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        // --- INTERACTION ---
+        const keys = Object.keys(shapes); let curShape = 0;
+        
+        function nextShape() {
+            curShape = (curShape + 1) % keys.length; 
+            document.getElementById('mode-display').innerText = keys[curShape].toUpperCase(); 
+            const arr = shapes[keys[curShape]]; 
+            for(let i=0; i<COUNT*3; i++) targetPositions[i] = arr[i];
+        }
+
+        // Allow click to change shape (since wallpapers capture mouse)
+        document.addEventListener('click', nextShape);
+
+        // --- WALLPAPER ENGINE AUDIO LISTENER ---
+        let sBass = 0, sMid = 0, sHigh = 0;
+        
+        // This function hooks into Wallpaper Engine's native audio system
+        window.wallpaperRegisterAudioListener = function(audioArray) {
+            // audioArray is a 128 element array of frequency data (0.0 to 1.0)
+            
+            // Calculate Bass (Lower frequencies)
+            let bassSum = 0;
+            for(let i = 0; i < 4; i++) bassSum += audioArray[i];
+            let bass = bassSum / 4;
+
+            // Calculate Mid
+            let midSum = 0;
+            for(let i = 10; i < 40; i++) midSum += audioArray[i];
+            let mid = midSum / 30;
+
+            // Calculate High
+            let highSum = 0;
+            for(let i = 60; i < 100; i++) highSum += audioArray[i];
+            let high = highSum / 40;
+
+            // Apply smoothing
+            if(bass > sBass) sBass += (bass - sBass) * 0.8; else sBass += (bass - sBass) * 0.1;
+            sMid += (mid - sMid) * 0.2;
+            sHigh += (high - sHigh) * 0.3;
+
+            // Update Uniforms
+            uniforms.uBass.value = sBass;
+            uniforms.uMid.value = sMid;
+            uniforms.uHigh.value = sHigh;
+
+            // Update UI Bars
+            document.getElementById('vis-low').style.height = Math.min(sBass * 150, 100) + "%";
+            document.getElementById('vis-mid').style.height = Math.min(sMid * 150, 100) + "%";
+            document.getElementById('vis-high').style.height = Math.min(sHigh * 150, 100) + "%";
+        };
+
+        // --- ANIMATION ---
+        function animate(time) { 
+            requestAnimationFrame(animate); 
+            
+            uniforms.uTime.value = time * 0.001;
+
+            // Slow rotate camera
+            camAngle += 0.001;
+            camera.position.x = Math.sin(camAngle) * 900;
+            camera.position.z = Math.cos(camAngle) * 900;
+            camera.lookAt(0,0,0);
+
+            // Morph
+            const pos = geometry.attributes.position.array; 
+            for(let i=0;i<COUNT*3;i++) pos[i]+=(targetPositions[i]-pos[i])*0.03; 
+            geometry.attributes.position.needsUpdate=true;
+
+            composer.render(); 
+        }
+        
+        window.addEventListener('resize', () => { 
+            camera.aspect=window.innerWidth/window.innerHeight; 
+            camera.updateProjectionMatrix(); 
+            renderer.setSize(window.innerWidth, window.innerHeight); 
+            composer.setSize(window.innerWidth, window.innerHeight); 
+        });
+        
+        animate(0);
+    </script>
+</body>
+</html>

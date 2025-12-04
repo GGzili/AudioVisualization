@@ -1,0 +1,17 @@
+{
+  "title": "Y2K Cyber Visualizer",
+  "description": "Audio reactive Three.js particle system. Boran Made.",
+  "file": "index.html",
+  "type": "web",
+  "preview": "preview.jpg",
+  "general": {
+    "properties": {
+      "schemecolor": {
+        "order": 0,
+        "text": "ui_browse_properties_scheme_color",
+        "type": "color",
+        "value": "0 243 255"
+      }
+    }
+  }
+}
